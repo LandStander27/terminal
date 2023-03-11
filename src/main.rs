@@ -10,6 +10,10 @@ use std::io::Write;
 use ctrlc;
 use std::fs;
 use sysinfo::{ProcessExt, System, SystemExt};
+use sublime_fuzzy::best_match;
+use clearscreen;
+use dircpy::*;
+use std::fs::File;
 
 struct Command {
 	name: String,
@@ -44,7 +48,7 @@ fn main() {
 
 	commands.push( Command {
 		name: "ls".to_string(),
-		help: "Lists current directory".to_string(),
+		help: "Lists current directory: ls {path}".to_string(),
 		arg_count: Vec::from([1, 2]),
 		func: |args: Vec<String>| {
 
@@ -91,7 +95,7 @@ fn main() {
 
 	commands.push( Command {
 		name: "cd".to_string(),
-		help: "Changes the current directory".to_string(),
+		help: "Changes the current directory: cd {path}".to_string(),
 		arg_count: Vec::from([2]),
 		func: |args: Vec<String>| {
 			let new = Path::new(args[1].as_str());
@@ -104,16 +108,16 @@ fn main() {
 
 	commands.push( Command {
 		name: "tasklist".to_string(),
-		help: "Lists current tasks".to_string(),
-		arg_count: Vec::from([1]),
-		func: |_args: Vec<String>| {
+		help: "Lists current tasks {searchterm}".to_string(),
+		arg_count: Vec::from([1, 2]),
+		func: |args: Vec<String>| {
 			let mut s = System::new();
 			s.refresh_processes();
 
 			let mut values: Vec<Vec<String>> = Vec::new();
 
 			for (pid, proc) in s.processes() {
-				values.push(Vec::from([pid.to_string(), proc.name().to_string(), if proc.exe().to_str().unwrap() != "" {String::from(proc.exe().file_name().unwrap().to_str().unwrap())} else {"".to_string()}]));
+				values.push(Vec::from([pid.to_string(), proc.name().to_string(), if proc.exe().to_str().unwrap() != "" {String::from(proc.exe().file_name().unwrap().to_str().unwrap())} else {"".to_string()}, (proc.cpu_usage()*100.0).round().to_string()+"%"]));
 			}
 			
 			let mut max_length: [usize; 3] = [0, 0, 0];
@@ -129,22 +133,198 @@ fn main() {
 				}
 			}
 
-			println!("PID{}NAME{}PATH{}", " ".repeat(max_length[0]-3+3), " ".repeat(max_length[1]-4+3), " ".repeat(max_length[2]-4+3));
-			println!("{} {} {}", "=".repeat(max_length[0]+2), "=".repeat(max_length[1]+2), "=".repeat(max_length[2]+2));
+			println!("PID{}NAME{}PATH{}CPU", " ".repeat(max_length[0]-3+3), " ".repeat(max_length[1]-4+3), " ".repeat(max_length[2]-4+3));
+			println!("{} {} {} {}", "=".repeat(max_length[0]+2), "=".repeat(max_length[1]+2), "=".repeat(max_length[2]+2), "======");
 
-			for i in values {
-				println!("{}{}{}{}{}", i[0], " ".repeat(max_length[0]-i[0].len()+3), i[1], " ".repeat(max_length[1]-i[1].len()+3), i[2]);
+			if args.len() == 1 {
+				for i in values {
+					println!("{}{}{}{}{}{}{}", i[0], " ".repeat(max_length[0]-i[0].len()+3), i[1], " ".repeat(max_length[1]-i[1].len()+3), i[2], " ".repeat(max_length[2]-i[2].len()+3), i[3]);
+				}
+			} else {
+				for i in values {
+					let score = best_match(args[1].as_str(), i[1].as_str()).is_some() || best_match(args[1].as_str(), i[2].as_str()).is_some();
+					if score {
+						println!("{}{}{}{}{}{}{}", i[0], " ".repeat(max_length[0]-i[0].len()+3), i[1], " ".repeat(max_length[1]-i[1].len()+3), i[2], " ".repeat(max_length[2]-i[2].len()+3), i[3]);
+					}
+				}
 			}
 
-			Ok("".to_string())
+
+			return Ok("".to_string())
 		}
 	});
 
-	let help_command = || {
+	commands.push( Command {
+		name: "taskkill".to_string(),
+		help: "Kill a task: taskkill [-pid/-name] {process}".to_string(),
+		arg_count: Vec::from([3]),
+		func: |args: Vec<String>| {
 
-		for i in 0..commands.len() {
-			println!("{}: {}", commands[i].name, commands[i].help);
+			if !(["-pid", "-name"].contains(&args[1].to_lowercase().as_str())) {
+				return Err("Invalid argument at place 1 (".to_string()+args[1].as_str()+")")
+			}
+
+			let mut s = System::new();
+			s.refresh_processes();
+
+			let mut exists: bool = false;
+			for (pid, proc) in s.processes() {
+				if args[1].to_lowercase() == "-pid" {
+					if pid.to_string() == args[2] {
+						proc.kill();
+						exists = true;
+						break;
+					}
+				} else if args[1].to_lowercase() == "-name" {
+					if proc.name() == args[2] || proc.exe().to_str().unwrap() == args[2] {
+						exists = true;
+						proc.kill();
+					}
+				}
+			}
+			if !exists {
+				return Err("Process does not exist".to_string())
+			}
+
+			return Ok("Killed process ".to_string() + args[2].as_str())
 		}
+	});
+
+	commands.push( Command {
+		name: "clear".to_string(),
+		help: "Clears the terminal".to_string(),
+		arg_count: Vec::from([1]),
+		func: |_args: Vec<String>| {
+			let r: Result<(), clearscreen::Error> = clearscreen::clear();
+			match r {
+				Ok(_) => return Ok("".to_string()),
+				Err(_) => return Err("Could not clear screen".to_string())
+			}
+			// return Ok("".to_string())
+		}
+	});
+
+	commands.push( Command {
+		name: "rm".to_string(),
+		help: "Deletes a file: rm {file}".to_string(),
+		arg_count: Vec::from([2]),
+		func: |args: Vec<String>| {
+			if !Path::new(&args[1].clone()).is_file() {
+				return Err("Invalid file".to_string())
+			}
+			let r: Result<(), io::Error> = fs::remove_file(args[1].as_str());
+			match r {
+				Ok(_) => return Ok("Deleted file".to_string()),
+				Err(_) => return Err("Could not delete file".to_string())
+			}
+		}
+	});
+	commands.push( Command {
+		name: "rmdir".to_string(),
+		help: "Deletes a directory: rmdir {dir}".to_string(),
+		arg_count: Vec::from([2]),
+		func: |args: Vec<String>| {
+			if !Path::new(&args[1].clone()).is_dir() {
+				return Err("Invalid directory".to_string())
+			}
+			let r: Result<(), io::Error> = fs::remove_dir_all(args[1].as_str());
+			match r {
+				Ok(_) => return Ok("Deleted directory".to_string()),
+				Err(_) => return Err("Could not delete directory".to_string())
+			}
+		}
+	});
+	commands.push( Command {
+		name: "mkdir".to_string(),
+		help: "Makes a directory: mkdir {dir}".to_string(),
+		arg_count: Vec::from([2]),
+		func: |args: Vec<String>| {
+			if Path::new(&args[1].clone()).is_dir() {
+				return Err("Directory already exists".to_string())
+			}
+			let r: Result<(), io::Error> = fs::create_dir(args[1].as_str());
+			match r {
+				Ok(_) => return Ok("Created directory".to_string()),
+				Err(_) => return Err("Could not create directory".to_string())
+			}
+		}
+	});
+
+	commands.push( Command {
+		name: "cp".to_string(),
+		help: "Copy files and directories: cp {source} {target}".to_string(),
+		arg_count: Vec::from([3]),
+		func: |args: Vec<String>| {
+			if Path::new(&args[1].clone()).is_dir() {
+				let r: Result<(), io::Error> = CopyBuilder::new(args[1].as_str(), args[2].as_str()).run();
+				match r {
+					Ok(_) => return Ok("Copied source".to_string()),
+					Err(e) => return Err("Could not copy source: ".to_string() + e.to_string().as_str())
+				}
+			} else if Path::new(&args[1].clone()).is_file() {
+				let r: Result<u64, io::Error> = fs::copy(args[1].as_str(), args[2].as_str());
+				match r {
+					Ok(_) => return Ok("Copied source".to_string()),
+					Err(_) => return Err("Could not copy source".to_string())
+				}
+			} else {
+				return Err("Source does not exist".to_string())
+			}
+
+		}
+	});
+
+	commands.push( Command {
+		name: "mv".to_string(),
+		help: "Move files and directories: mv {source} {target}".to_string(),
+		arg_count: Vec::from([3]),
+		func: |args: Vec<String>| {
+
+			let r: Result<(), io::Error> = fs::rename(args[1].as_str(), args[2].as_str());
+			match r {
+				Ok(_) => return Ok("Moved source".to_string()),
+				Err(e) => return Err("Could not move source: ".to_string() + e.to_string().as_str())
+			}
+
+		}
+	});
+
+	commands.push( Command {
+		name: "touch".to_string(),
+		help: "Create a file: touch {file}".to_string(),
+		arg_count: Vec::from([2]),
+		func: |args: Vec<String>| {
+			if Path::new(&args[1].clone()).is_file() {
+				return Err("File already exists".to_string())
+			}
+			let r: Result<File, io::Error> = File::create(args[1].as_str());
+			match r {
+				Ok(_) => return Ok("Created directory".to_string()),
+				Err(_) => return Err("Could not create directory".to_string())
+			}
+		}
+	});
+
+	let help_command = |c: String| {
+
+		if c == "" {
+			for i in 0..commands.len() {
+				println!("{}: {}", commands[i].name, commands[i].help);
+			}
+		} else {
+			let mut cmd: Vec<[String; 2]> = Vec::new();
+			for i in 0..commands.len() {
+				// printl;n!("{}: {}", commands[i].name, commands[i].help);
+				cmd.push([commands[i].name.clone(), commands[i].help.clone()]);
+			}
+			for i in cmd {
+				let score = best_match(c.as_str(), i[0].as_str()).is_some() || best_match(c.as_str(), i[1].as_str()).is_some();
+				if score {
+					println!("{}: {}", i[0], i[1]);
+				}
+			}
+		}
+
 
 	};
 
@@ -175,7 +355,7 @@ fn main() {
 
 		for i in 0..commands.len() {
 			if args[0].to_lowercase() == "help" {
-				help_command();
+				help_command(if args.len() != 1 {args[1].to_lowercase()} else {"".to_string()});
 				break;
 			}
 			if commands[i].name == args[0].to_lowercase() {
