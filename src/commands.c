@@ -42,32 +42,33 @@ void mode_to_str(char* str, char* mode) {
 		}
 		strcat(str, current);
 	}
+	str[9] = '\0';
 
 }
 
-void human_readable(char* str, long double bytes) {
+void human_readable(char* str, long long bytes) {
 	str[0] = '\0';
-	if (bytes >= 1099511627776.0) {
-		sprintf(str, "%.2LF", bytes/1099511627776.0);
+	if (bytes >= (long long)1099511627776) {
+		sprintf(str, "%.2LF", bytes/(long double)1099511627776.0);
 		strcat(str, "TB");
 		return;
 	}
-	if (bytes >= 1073741824.0) {
-		sprintf(str, "%.2LF", bytes/1073741824.0);
+	if (bytes >= (long long)1073741824) {
+		sprintf(str, "%.2LF", bytes/(long double)1073741824.0);
 		strcat(str, "GB");
 		return;
 	}
-	if (bytes >= 1048576.0) {
-		sprintf(str, "%.2LF", bytes/1048576.0);
+	if (bytes >= (long long)1048576) {
+		sprintf(str, "%.2LF", bytes/(long double)1048576.0);
 		strcat(str, "MB");
 		return;
 	}
-	if (bytes >= 1024.0) {
-		sprintf(str, "%.2LF", bytes/1024.0);
+	if (bytes >= (long long)1024) {
+		sprintf(str, "%.2LF", bytes/(long double)1024.0);
 		strcat(str, "KB");
 		return;
 	}
-	sprintf(str, "%.0LF", bytes);
+	sprintf(str, "%d", bytes);
 	strcat(str, "B");
 	return;
 }
@@ -118,9 +119,8 @@ int ls(char** argv, int argc) {
 	while ((entry = readdir(d)) != NULL) {
 		struct stat s;
 		if (stat(entry->d_name, &s) != 0) {
-			printf("stat() err\n");
-			closedir(d);
-			return 3;
+			printf("stat() err: %s\n", entry->d_name);
+			continue;
 		}
 
 		char size[50];
@@ -130,13 +130,6 @@ int ls(char** argv, int argc) {
 			most_size_len = len;
 		}
 
-		#ifndef _WIN64
-		struct passwd* user = getpwuid(s.st_uid);
-		if ((len = strlen(user->pw_name)) > most_owner_len) {
-			most_owner_len = len;
-		}
-		#endif
-
 	}
 
 	closedir(d);
@@ -144,9 +137,8 @@ int ls(char** argv, int argc) {
 	while ((entry = readdir(d)) != NULL) {
 		struct stat s;
 		if (stat(entry->d_name, &s) != 0) {
-			printf("stat() err\n");
-			closedir(d);
-			return 3;
+			printf("stat() err: %s\n", entry->d_name);
+			continue;
 		}
 		char mode[7];
 		snprintf(mode, 7, "%o", s.st_mode);
@@ -158,14 +150,6 @@ int ls(char** argv, int argc) {
 		char size[50];
 		human_readable(size, (long double)s.st_size);
 
-		#ifndef _WIN64
-		struct passwd* user = getpwuid(s.st_uid);
-		printf("%s  %s  ", to_str, user->pw_name);
-		for (int i = 0; i < most_size_len-(int)strlen(size)+most_owner_len-(int)strlen(user->pw_name); i++) {
-			printf(" ");
-		}
-		printf("%s  %s\n", size, entry->d_name);
-		#else
 		printf("%s  ", to_str);
 		for (int i = 0; i < most_size_len-(int)strlen(size); i++) {
 			printf(" ");
@@ -177,7 +161,6 @@ int ls(char** argv, int argc) {
 		} else {
 			printf("%s  %s\n", size, entry->d_name);
 		}
-		#endif
 	}
 
 	closedir(d);
@@ -192,57 +175,76 @@ int ls(char** argv, int argc) {
 		printf("scandir() err\n");
 		return 4;
 	}
+	struct stat s;
+
+	char size[50];
+	char (*sizes)[50] = malloc((amount+1)*sizeof(char[50]));
+	int sizes_len = 0;
+
+	char (*modes)[10] = malloc((amount+1)*sizeof(char[10]));
+	int modes_len = 0;
+
+	struct passwd** users = malloc((amount+1)*sizeof(struct passwd*));
+	int users_len = 0;
+
+	int len;
+	struct passwd* user;
+	char mode[7];
+	char to_str[10];
 	for (int i = 0; i < amount; i++) {
-		struct stat s;
 		if (stat(list[i]->d_name, &s) != 0) {
-			printf("stat() err\n");
-			free(list);
-			return 3;
+			printf("stat() err: %s\n", list[i]->d_name);
+			sizes_len++;
+			modes_len++;
+			users_len++;
+			continue;
 		}
 
-		char size[50];
-		human_readable(size, (long double)s.st_size);
-		int len;
+		snprintf(mode, 7, "%o", s.st_mode);
+		snprintf(mode, 7, "%s", mode+strlen(mode)-3);
+
+		mode_to_str(to_str, mode);
+		strcpy(modes[modes_len], to_str);
+		modes_len++;
+
+		human_readable(size, s.st_size);
+		strcpy(sizes[sizes_len], size);
+		printf("%s, %d\n", size, s.st_size);
+		sizes_len++;
 		if ((len = strlen(size)) > most_size_len) {
 			most_size_len = len;
 		}
 
-		struct passwd* user = getpwuid(s.st_uid);
+		user = getpwuid(s.st_uid);
+		users[users_len] = user;
+		users_len++;
 		if ((len = strlen(user->pw_name)) > most_owner_len) {
 			most_owner_len = len;
 		}
 	}
+
 	for (int i = 0; i < amount; i++) {
-		struct stat s;
 		if (stat(list[i]->d_name, &s) != 0) {
-			printf("stat() err\n");
-			free(list);
-			return 3;
+			printf("stat() err: %s\n", list[i]->d_name);
+			continue;
 		}
-		char mode[7];
-		snprintf(mode, 7, "%o", s.st_mode);
-		snprintf(mode, 7, "%s", mode+strlen(mode)-3);
 
-		char to_str[10];
-		mode_to_str(to_str, mode);
-
-		char size[50];
-		human_readable(size, (long double)s.st_size);
-
-		struct passwd* user = getpwuid(s.st_uid);
-		printf("%s  %s  ", to_str, user->pw_name);
-		for (int i = 0; i < most_size_len-(int)strlen(size)+most_owner_len-(int)strlen(user->pw_name); i++) {
+		printf("%s  %s  ", modes[i], users[i]->pw_name);
+		for (int j = 0; j < most_size_len-(int)strlen(sizes[i]); j++) {
 			printf(" ");
 		}
 		if (S_ISDIR(s.st_mode)) {
-			printf("%s  " blue "%s" reset "\n", size, list[i]->d_name);
+			printf("%s  " blue "%s" reset "\n", sizes[i], list[i]->d_name);
 		} else if (s.st_mode & S_IXUSR) {
-			printf("%s  " green "%s" reset "\n", size, list[i]->d_name);
+			printf("%s  " green "%s" reset "\n", sizes[i], list[i]->d_name);
 		} else {
-			printf("%s  %s\n", size, list[i]->d_name);
+			printf("%s  %s\n", sizes[i], list[i]->d_name);
 		}
 		free(list[i]);
 	}
+	free(sizes);
+	free(modes);
+	free(users);
 	free(list);
 	#endif
 }
