@@ -209,7 +209,6 @@ int ls(char** argv, int argc) {
 
 		human_readable(size, s.st_size);
 		strcpy(sizes[sizes_len], size);
-		printf("%s, %d\n", size, s.st_size);
 		sizes_len++;
 		if ((len = strlen(size)) > most_size_len) {
 			most_size_len = len;
