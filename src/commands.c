@@ -10,6 +10,10 @@
 #include <pwd.h>
 #endif
 
+#define blue "\x1b[34m"
+#define green "\x1b[32m"
+#define reset "\x1b[0m"
+
 #define CD 5863276
 #define EXIT 6385204799
 #define LS 5863588
@@ -166,7 +170,13 @@ int ls(char** argv, int argc) {
 		for (int i = 0; i < most_size_len-(int)strlen(size); i++) {
 			printf(" ");
 		}
-		printf("%s  %s\n", size, entry->d_name);
+		if (S_ISDIR(s.st_mode)) {
+			printf("%s  " blue "%s" reset "\n", size, entry->d_name);
+		} else if (s.st_mode & S_IXUSR) {
+			printf("%s  " green "%s" reset "\n", size, entry->d_name);
+		} else {
+			printf("%s  %s\n", size, entry->d_name);
+		}
 		#endif
 	}
 
@@ -224,7 +234,13 @@ int ls(char** argv, int argc) {
 		for (int i = 0; i < most_size_len-(int)strlen(size)+most_owner_len-(int)strlen(user->pw_name); i++) {
 			printf(" ");
 		}
-		printf("%s  %s\n", size, list[i]->d_name);
+		if (S_ISDIR(s.st_mode)) {
+			printf("%s  " blue "%s" reset "\n", size, list[i]->d_name);
+		} else if (s.st_mode & S_IXUSR) {
+			printf("%s  " green "%s" reset "\n", size, list[i]->d_name);
+		} else {
+			printf("%s  %s\n", size, list[i]->d_name);
+		}
 		free(list[i]);
 	}
 	free(list);
