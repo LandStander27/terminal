@@ -1,24 +1,24 @@
 debug:
 	mkdir -p bin
-	gcc -o ./bin/main src/main.c src/commands.c -Wextra -lreadline -Iinclude -g
+	gcc -o ./bin/terminal src/main.c src/commands.c -Wextra -lreadline -Iinclude -g
 
 build:
 	mkdir -p bin
-	gcc -o ./bin/main src/main.c src/commands.c -Wextra -lreadline -Iinclude
+	gcc -o ./bin/terminal src/main.c src/commands.c -Wextra -lreadline -Iinclude
 
 run:
 	mkdir -p bin
-	gcc -o ./bin/main src/main.c src/commands.c -Wextra -lreadline -Iinclude
-	./bin/main
+	gcc -o ./bin/terminal src/main.c src/commands.c -Wextra -lreadline -Iinclude
+	./bin/terminal
 
 windows:
 	mkdir -p bin
-	gcc.exe -o ./bin/main.exe src/main.c src/commands.c -Wextra -Iinclude
+	gcc.exe -o ./bin/terminal.exe src/main.c src/commands.c -Wextra -Iinclude
 
 windows-run:
 	mkdir -p bin
-	gcc.exe -o ./bin/main.exe src/main.c src/commands.c -Wextra -Iinclude
-	./bin/main.exe
+	gcc.exe -o ./bin/terminal.exe src/main.c src/commands.c -Wextra -Iinclude
+	./bin/terminal.exe
 
 clean:
 	rm -rf bin
