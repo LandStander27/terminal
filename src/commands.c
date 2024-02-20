@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifndef _WIN64
 #include <pwd.h>
@@ -150,16 +151,19 @@ int ls(char** argv, int argc) {
 		char size[50];
 		human_readable(size, (long double)s.st_size);
 
+		char date[20];
+		strftime(date, 20, "%b %d %H:%M", localtime(&(s.st_mtime)));
+
 		printf("%s  ", to_str);
 		for (int i = 0; i < most_size_len-(int)strlen(size); i++) {
 			printf(" ");
 		}
 		if (S_ISDIR(s.st_mode)) {
-			printf("%s  " blue "%s" reset "\n", size, entry->d_name);
+			printf("%s  %s  " blue "%s" reset "\n", size, date, entry->d_name);
 		} else if (s.st_mode & S_IXUSR) {
-			printf("%s  " green "%s" reset "\n", size, entry->d_name);
+			printf("%s  %s  " green "%s" reset "\n", size, date, entry->d_name);
 		} else {
-			printf("%s  %s\n", size, entry->d_name);
+			printf("%s  %s  %s\n", size, date, entry->d_name);
 		}
 	}
 
@@ -223,6 +227,9 @@ int ls(char** argv, int argc) {
 	}
 
 	for (int i = 0; i < amount; i++) {
+		if (strcmp(list[i]->d_name, ".") == 0 || strcmp(list[i]->d_name, "..") == 0) {
+			continue;
+		}
 		if (stat(list[i]->d_name, &s) != 0) {
 			printf("stat() err: %s\n", list[i]->d_name);
 			continue;
@@ -232,12 +239,15 @@ int ls(char** argv, int argc) {
 		for (int j = 0; j < most_size_len-(int)strlen(sizes[i]); j++) {
 			printf(" ");
 		}
+
+		char date[20];
+		strftime(date, 20, "%b %d %H:%M", localtime(&(s.st_mtime)));
 		if (S_ISDIR(s.st_mode)) {
-			printf("%s  " blue "%s" reset "\n", sizes[i], list[i]->d_name);
+			printf("%s  %s  " blue "%s" reset "\n", sizes[i], date, list[i]->d_name);
 		} else if (s.st_mode & S_IXUSR) {
-			printf("%s  " green "%s" reset "\n", sizes[i], list[i]->d_name);
+			printf("%s  %s  " green "%s" reset "\n", sizes[i], date, list[i]->d_name);
 		} else {
-			printf("%s  %s\n", sizes[i], list[i]->d_name);
+			printf("%s  %s  %s\n", sizes[i], date, list[i]->d_name);
 		}
 		free(list[i]);
 	}

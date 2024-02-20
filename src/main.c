@@ -136,8 +136,6 @@ int main() {
 	#endif
 
 	signal(SIGINT, handle_signals);
-	// char *a[] = { "ping", "10.250.250.5", (char*)0 };
-	// run_binary("ping", a, 2, "ping 10.250.250.5");
 
 	char **args;
 	wordexp_t p;
