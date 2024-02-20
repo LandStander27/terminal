@@ -22,3 +22,6 @@ windows-run:
 
 clean:
 	rm -rf bin
+
+deps:
+	sudo apt install -y git make gcc libreadline-dev
