@@ -69,7 +69,7 @@ void human_readable(char* str, long long bytes) {
 		strcat(str, "KB");
 		return;
 	}
-	sprintf(str, "%d", bytes);
+	sprintf(str, "%lld", bytes);
 	strcat(str, "B");
 	return;
 }
